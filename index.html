@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Fuzzy Fitness Guide</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; display: flex; justify-content: center; padding: 40px; }
+        .app-card { background: #1e1e1e; padding: 30px; border-radius: 25px; width: 450px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); border: 1px solid #333; }
+        .input-section { margin-bottom: 25px; }
+        label { display: block; margin-bottom: 10px; font-weight: 500; color: #bbb; }
+        input[type="range"] { width: 100%; cursor: pointer; accent-color: #bb86fc; }
+        
+        #result-display { 
+            background: #252525; padding: 25px; border-radius: 20px; text-align: center; 
+            margin-top: 20px; transition: 0.4s; border-bottom: 5px solid #bb86fc;
+        }
+        .activity-name { font-size: 2rem; font-weight: 800; margin: 10px 0; letter-spacing: 1px; }
+        .logic-hint { font-size: 0.8rem; color: #777; margin-top: 15px; line-height: 1.4; }
+        .val-badge { float: right; color: #bb86fc; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="app-card">
+    <h2 style="text-align: center; margin-top: 0; color: #bb86fc;">Fitness Advisor 🏃‍♂️</h2>
+    
+    <div class="input-section">
+        <label>Kualitas Tidur (Jam) <span class="val-badge" id="sleepVal">7</span></label>
+        <input type="range" id="sleepInp" min="3" max="10" value="7">
+    </div>
+
+    <div class="input-section">
+        <label>Tingkat Stres (0-100) <span class="val-badge" id="stressVal">50</span></label>
+        <input type="range" id="stressInp" min="0" max="100" value="50">
+    </div>
+
+    <div id="result-display">
+        <div style="font-size: 0.8rem; opacity: 0.7;">REKOMENDASI HARI INI:</div>
+        <div class="activity-name" id="activity">YOGA</div>
+        <div id="adviceText">Bagus untuk menjaga keseimbangan tubuh.</div>
+        
+        <div class="logic-hint" id="fuzzyRule">
+            IF Tidur Cukup AND Stres Sedang THEN Yoga
+        </div>
+    </div>
+</div>
+
+<script>
+    const sInp = document.getElementById('sleepInp');
+    const stInp = document.getElementById('stressInp');
+
+    function updateFitness() {
+        let tidur = parseInt(sInp.value);
+        let stres = parseInt(stInp.value);
+        
+        document.getElementById('sleepVal').innerText = tidur + " Jam";
+        document.getElementById('stressVal').innerText = stres;
+
+        // 1. FUZZIFIKASI (Kategorisasi)
+        let catTidur = (tidur <= 5) ? "BURUK" : (tidur <= 7 ? "CUKUP" : "NYENYAK");
+        let catStres = (stres <= 30) ? "RENDAH" : (stres <= 70 ? "SEDANG" : "TINGGI");
+
+        let activity = "";
+        let color = "";
+        let advice = "";
+
+        // 2. RULE BASE (9 Kondisi)
+        if (catTidur == "BURUK") {
+            if (catStres == "RENDAH") { activity = "ISTIRAHAT"; color = "#cf6679"; advice = "Tidur Anda kurang, ambil waktu istirahat."; }
+            if (catStres == "SEDANG") { activity = "ISTIRAHAT"; color = "#cf6679"; advice = "Jangan memaksakan diri hari ini."; }
+            if (catStres == "TINGGI") { activity = "MEDITASI"; color = "#03dac6"; advice = "Fokus pada pernapasan dan relaksasi."; }
+        } 
+        else if (catTidur == "CUKUP") {
+            if (catStres == "RENDAH") { activity = "JALAN SANTAI"; color = "#bb86fc"; advice = "Gerak ringan untuk menjaga metabolisme."; }
+            if (catStres == "SEDANG") { activity = "YOGA"; color = "#bb86fc"; advice = "Keseimbangan antara fisik dan mental."; }
+            if (catStres == "TINGGI") { activity = "ISTIRAHAT"; color = "#cf6679"; advice = "Stres tinggi, tidur cukup adalah kunci."; }
+        } 
+        else if (catTidur == "NYENYAK") {
+            if (catStres == "RENDAH") { activity = "LARI / GYM"; color = "#3700b3"; advice = "Energi penuh! Saatnya latihan intens."; }
+            if (catStres == "SEDANG") { activity = "BERSEPEDA"; color = "#bb86fc"; advice = "Kardio yang menyenangkan untuk hari ini."; }
+            if (catStres == "TINGGI") { activity = "YOGA"; color = "#03dac6"; advice = "Tubuh kuat, tapi pikiran butuh ketenangan."; }
+        }
+
+        // 3. UI UPDATE
+        const display = document.getElementById('result-display');
+        document.getElementById('activity').innerText = activity;
+        document.getElementById('activity').style.color = color;
+        document.getElementById('adviceText').innerText = advice;
+        display.style.borderBottomColor = color;
+        document.getElementById('fuzzyRule').innerText = `Aturan Aktif: IF Tidur ${catTidur} AND Stres ${catStres} THEN ${activity}`;
+    }
+
+    sInp.addEventListener('input', updateFitness);
+    stInp.addEventListener('input', updateFitness);
+    updateFitness();
+</script>
+
+</body>
+</html>
