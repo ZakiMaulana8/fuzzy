@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Fuzzy Fitness Logic Pro</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; display: flex; justify-content: center; padding: 40px; }
+        .app-card { background: #1e1e1e; padding: 30px; border-radius: 25px; width: 480px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); border: 1px solid #333; }
+        .input-section { margin-bottom: 25px; }
+        label { display: block; margin-bottom: 10px; font-weight: 500; color: #bbb; }
+        input[type="range"] { width: 100%; cursor: pointer; accent-color: #bb86fc; }
+        #result-display { background: #252525; padding: 25px; border-radius: 20px; text-align: center; margin-top: 20px; transition: 0.4s; border-bottom: 8px solid #bb86fc; }
+        .activity-name { font-size: 2.2rem; font-weight: 800; margin: 10px 0; letter-spacing: 1px; }
+        .debug-info { font-size: 0.75rem; color: #666; text-align: left; background: #1a1a1a; padding: 12px; border-radius: 10px; margin-top: 15px; font-family: monospace; }
+        .val-badge { float: right; color: #bb86fc; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="app-card">
+    <h2 style="text-align: center; margin-top: 0; color: #bb86fc;">Fuzzy Fitness Advisor 🏃‍♂️</h2>
+    
+    <div class="input-section">
+        <label>Kualitas Tidur (Jam) <span class="val-badge" id="sleepVal">7</span></label>
+        <input type="range" id="sleepInp" min="3" max="10" step="0.1" value="7">
+    </div>
+
+    <div class="input-section">
+        <label>Tingkat Stres (0-100) <span class="val-badge" id="stressVal">50</span></label>
+        <input type="range" id="stressInp" min="0" max="100" value="50">
+    </div>
+
+    <div id="result-display">
+        <div style="font-size: 0.8rem; opacity: 0.7; letter-spacing: 2px;">REKOMENDASI:</div>
+        <div class="activity-name" id="activity">-</div>
+        <div id="adviceText">-</div>
+        
+        <div class="debug-info" id="debugLog"></div>
+    </div>
+</div>
+
+<script>
+    // Mengambil elemen HTML ke dalam variabel JavaScript
+    const sInp = document.getElementById('sleepInp');
+    const stInp = document.getElementById('stressInp');
+
+    // --- LANGKAH 1: DEFINISI FUNGSI KEANGGOTAAN (MEMBERSHIP FUNCTIONS) ---
+    // Ini menggantikan 'if-else' kaku. Input angka diubah jadi derajat keanggotaan 0 sampai 1.
+
+    function hitungTidur(x) {
+        return {
+            // Jika tidur <= 4 jam (100% buruk), jika di antara 4-6 jam (turun perlahan ke 0%)
+            buruk: x <= 4 ? 1 : (x < 6 ? (6 - x) / (6 - 4) : 0),
+            // Jika di antara 4-8 jam, puncaknya ada di 6 jam
+            cukup: (x <= 4 || x >= 8) ? 0 : (x < 6 ? (x - 4) / (6 - 4) : (8 - x) / (8 - 6)),
+            // Jika > 6 jam mulai naik, jika >= 8 jam (100% nyenyak)
+            nyenyak: x >= 8 ? 1 : (x > 6 ? (x - 6) / (8 - 6) : 0)
+        };
+    }
+
+    
+
+    function hitungStres(x) {
+        return {
+            rendah: x <= 20 ? 1 : (x < 40 ? (40 - x) / (40 - 20) : 0),
+            sedang: (x <= 20 || x >= 80) ? 0 : (x < 50 ? (x - 20) / (50 - 20) : (80 - x) / (80 - 50)),
+            tinggi: x >= 80 ? 1 : (x > 50 ? (x - 50) / (80 - 50) : 0)
+        };
+    }
+
+    // Fungsi utama yang dijalankan setiap kali slider digeser
+    function updateFitness() {
+        // Ambil nilai numerik dari slider
+        let tidurVal = parseFloat(sInp.value);
+        let stresVal = parseInt(stInp.value);
+        
+        // Update label angka di UI
+        document.getElementById('sleepVal').innerText = tidurVal + " Jam";
+        document.getElementById('stressVal').innerText = stresVal;
+
+        // --- LANGKAH 2: FUZZIFIKASI ---
+        // Mengonversi input angka menjadi derajat kebenaran (0.0 - 1.0)
+        let t = hitungTidur(tidurVal);
+        let s = hitungStres(stresVal);
+
+        // --- LANGKAH 3: INFERENSI (RULE BASE) ---
+        // Menentukan bobot (weight) untuk tiap jenis aktivitas (0=Sangat Ringan, 100=Sangat Berat)
+        // Kita menggunakan Math.min (Operator AND) untuk mengambil nilai terkecil dari dua kondisi
+        let rules = [
+            { val: Math.min(t.buruk, s.rendah), weight: 10 },  // ISTIRAHAT
+            { val: Math.min(t.buruk, s.sedang), weight: 10 },  // ISTIRAHAT
+            { val: Math.min(t.buruk, s.tinggi), weight: 30 },  // MEDITASI
+            { val: Math.min(t.cukup, s.rendah), weight: 50 },  // JALAN SANTAI
+            { val: Math.min(t.cukup, s.sedang), weight: 60 },  // YOGA
+            { val: Math.min(t.cukup, s.tinggi), weight: 10 },  // ISTIRAHAT
+            { val: Math.min(t.nyenyak, s.rendah), weight: 100 },// LARI / GYM
+            { val: Math.min(t.nyenyak, s.sedang), weight: 80 }, // BERSEPEDA
+            { val: Math.min(t.nyenyak, s.tinggi), weight: 60 }  // YOGA
+        ];
+
+        // --- LANGKAH 4: DEFUZZIFIKASI (MENCARI TITIK TENGAH / CENTROID) ---
+        // Rumus: (Aturan1*Bobot1 + Aturan2*Bobot2 ...) / (Total Nilai Aturan)
+        let totalWeight = 0;
+        let weightedSum = 0;
+
+        rules.forEach(r => {
+            weightedSum += (r.val * r.weight);
+            totalWeight += r.val;
+        });
+
+        // Skor akhir yang menentukan intensitas aktivitas (0 - 100)
+        let fuzzyScore = weightedSum / totalWeight;
+
+        // Tentukan Label, Pesan, dan Warna berdasarkan skor akhir (Output Sugeno)
+        let finalAct = "";
+        let color = "";
+        let advice = "";
+
+        if (fuzzyScore < 25) { 
+            finalAct = "ISTIRAHAT"; color = "#cf6679"; advice = "Tubuhmu butuh pemulihan total saat ini."; 
+        } else if (fuzzyScore < 45) { 
+            finalAct = "MEDITASI"; color = "#03dac6"; advice = "Fokus pada pernapasan untuk menurunkan tingkat stres."; 
+        } else if (fuzzyScore < 65) { 
+            finalAct = "YOGA / JALAN"; color = "#bb86fc"; advice = "Aktivitas ringan untuk menjaga keseimbangan tubuh."; 
+        } else if (fuzzyScore < 85) { 
+            finalAct = "BERSEPEDA"; color = "#6200ee"; advice = "Kardio intensitas menengah sangat cocok hari ini."; 
+        } else { 
+            finalAct = "LARI / GYM"; color = "#3700b3"; advice = "Kondisi fisik prima! Waktunya latihan intensitas tinggi."; 
+        }
+
+        // --- LANGKAH 5: UPDATE TAMPILAN (UI) ---
+        const display = document.getElementById('result-display');
+        const actText = document.getElementById('activity');
+        
+        actText.innerText = finalAct;
+        actText.style.color = color; // Ubah warna teks sesuai aktivitas
+        document.getElementById('adviceText').innerText = advice;
+        display.style.borderBottomColor = color; // Ubah warna garis bawah (Border)
+
+        // Menampilkan data teknis di panel debug agar kamu bisa belajar prosesnya
+        document.getElementById('debugLog').innerHTML = `
+            <b>PROSES FUZZY:</b><br>
+            Tidur (${tidurVal}): B:${t.buruk.toFixed(2)}, C:${t.cukup.toFixed(2)}, N:${t.nyenyak.toFixed(2)}<br>
+            Stres (${stresVal}): R:${s.rendah.toFixed(2)}, S:${s.sedang.toFixed(2)}, T:${s.tinggi.toFixed(2)}<br>
+            <b>SKOR AKHIR:</b> ${fuzzyScore.toFixed(2)} (Skala 0-100)
+        `;
+    }
+
+    // Pasang pendengar kejadian (Event Listener) agar update otomatis saat slider digeser
+    sInp.addEventListener('input', updateFitness);
+    stInp.addEventListener('input', updateFitness);
+    
+    // Jalankan fungsi satu kali saat halaman pertama kali dimuat
+    updateFitness();
+</script>
+
+</body>
+</html>
