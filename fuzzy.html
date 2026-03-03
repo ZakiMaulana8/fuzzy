@@ -1,91 +1,159 @@
 <!DOCTYPE html>
+<!-- APLIKASI FUZZY LOGIC UNTUK REKOMENDASI FITNESS -->
+<!-- Menggunakan logika fuzzy untuk memberikan rekomendasi olahraga berdasarkan kualitas tidur dan stres -->
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <title>Fuzzy Fitness Logic Pro</title>
+    <!-- STYLING CSS - Menentukan tampilan visual aplikasi -->
     <style>
+        /* BODY - Styling untuk halaman utama (background gelap, layout flex) */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; display: flex; justify-content: center; padding: 40px; }
+        
+        /* CARD UTAMA - Container untuk seluruh aplikasi */
         .app-card { background: #1e1e1e; padding: 30px; border-radius: 25px; width: 480px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); border: 1px solid #333; }
+        
+        /* BAGIAN INPUT - Spacing untuk setiap slider dan label */
         .input-section { margin-bottom: 25px; }
+        
+        /* LABEL - Teks untuk menjelaskan setiap slider */
         label { display: block; margin-bottom: 10px; font-weight: 500; color: #bbb; }
+        
+        /* SLIDER (Range Input) - Styling untuk slider interaktif */
         input[type="range"] { width: 100%; cursor: pointer; accent-color: #bb86fc; }
+        
+        /* HASIL DISPLAY - Panel untuk menampilkan rekomendasi akhir */
         #result-display { background: #252525; padding: 25px; border-radius: 20px; text-align: center; margin-top: 20px; transition: 0.4s; border-bottom: 8px solid #bb86fc; }
+        
+        /* NAMA AKTIVITAS - Teks besar untuk menampilkan rekomendasi utama */
         .activity-name { font-size: 2.2rem; font-weight: 800; margin: 10px 0; letter-spacing: 1px; }
+        
+        /* DEBUG INFO - Panel kecil untuk menampilkan nilai fuzzy (untuk pembelajaran) */
         .debug-info { font-size: 0.75rem; color: #666; text-align: left; background: #1a1a1a; padding: 12px; border-radius: 10px; margin-top: 15px; font-family: monospace; }
+        
+        /* VALUE BADGE - Menampilkan nilai numerik slider di sebelah kanan label */
         .val-badge { float: right; color: #bb86fc; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="app-card">
-    <h2 style="text-align: center; margin-top: 0; color: #bb86fc;">Fuzzy Fitness Advisor 🏃‍♂️</h2>
+    <!-- JUDUL APLIKASI -->
+    <h2 style="text-align: center; margin-top: 0; color: #bb86fc;">🏃‍♂️ Fuzzy Fitness Advisor</h2>
     
+    <!-- INPUT 1: SLIDER KUALITAS TIDUR (3-10 jam) -->
     <div class="input-section">
         <label>Kualitas Tidur (Jam) <span class="val-badge" id="sleepVal">7</span></label>
+        <!-- Slider berkisar 3-10 jam dengan step 0.1 jam, default 7 jam -->
         <input type="range" id="sleepInp" min="3" max="10" step="0.1" value="7">
     </div>
 
+    <!-- INPUT 2: SLIDER TINGKAT STRES (0-100) -->
     <div class="input-section">
         <label>Tingkat Stres (0-100) <span class="val-badge" id="stressVal">50</span></label>
+        <!-- Slider berkisar 0-100 dengan step 1, default 50 (stres sedang) -->
         <input type="range" id="stressInp" min="0" max="100" value="50">
     </div>
 
+    <!-- AREA HASIL REKOMENDASI -->
     <div id="result-display">
+        <!-- Label "REKOMENDASI" di atas -->
         <div style="font-size: 0.8rem; opacity: 0.7; letter-spacing: 2px;">REKOMENDASI:</div>
+        
+        <!-- NAMA AKTIVITAS (output utama dari fuzzy logic) -->
         <div class="activity-name" id="activity">-</div>
+        
+        <!-- SARAN DETAIL tentang aktivitas yang direkomendasikan -->
         <div id="adviceText">-</div>
         
+        <!-- PANEL DEBUG - menampilkan nilai fuzzy untuk pembelajaran dan debugging -->
         <div class="debug-info" id="debugLog"></div>
     </div>
 </div>
 
 <script>
-    // Mengambil elemen HTML ke dalam variabel JavaScript
-    const sInp = document.getElementById('sleepInp');
-    const stInp = document.getElementById('stressInp');
+    // ===== BAGIAN 1: SETUP VARIABEL DAN ELEMEN HTML =====
+    // Mengambil referensi elemen HTML agar bisa diakses dan dimanipulasi dengan JavaScript
+    const sInp = document.getElementById('sleepInp');      // Slider input kualitas tidur
+    const stInp = document.getElementById('stressInp');    // Slider input tingkat stres
 
-    // --- LANGKAH 1: DEFINISI FUNGSI KEANGGOTAAN (MEMBERSHIP FUNCTIONS) ---
-    // Ini menggantikan 'if-else' kaku. Input angka diubah jadi derajat keanggotaan 0 sampai 1.
+    // ===== BAGIAN 2: FUNGSI MEMBERSHIP (KEANGGOTAAN) =====
+    // Fuzzy logic menggunakan membership function untuk mengubah nilai numerik menjadi derajat kebenaran (0-1)
+    // Ini lebih baik daripada if-else kaku karena bisa menangkap nilai "di antara" kategori
 
+    /**
+     * Fungsi untuk menghitung derajat keanggotaan pada variabel TIDUR
+     * @param {number} x - Nilai jam tidur (3-10 jam)
+     * @returns {object} Object dengan 3 derajat keanggotaan: buruk, cukup, nyenyak
+     * 
+     * Penjelasan tiap kategori:
+     * - BURUK: Tidur <= 4 jam (nilai 1), kemudian turun linear sampai 6 jam (nilai 0)
+     * - CUKUP: Puncak di 6 jam (nilai 1), naik dari 4 jam, turun ke 8 jam
+     * - NYENYAK: Tidur >= 8 jam (nilai 1), mulai naik dari 6 jam
+     */
     function hitungTidur(x) {
         return {
-            // Jika tidur <= 4 jam (100% buruk), jika di antara 4-6 jam (turun perlahan ke 0%)
+            // Kategori BURUK: semakin sedikit tidur, semakin bernilai 1
             buruk: x <= 4 ? 1 : (x < 6 ? (6 - x) / (6 - 4) : 0),
-            // Jika di antara 4-8 jam, puncaknya ada di 6 jam
+            
+            // Kategori CUKUP: puncak di tengah-tengah (6 jam tidur ideal)
             cukup: (x <= 4 || x >= 8) ? 0 : (x < 6 ? (x - 4) / (6 - 4) : (8 - x) / (8 - 6)),
-            // Jika > 6 jam mulai naik, jika >= 8 jam (100% nyenyak)
+            
+            // Kategori NYENYAK: semakin banyak tidur, semakin bernilai 1
             nyenyak: x >= 8 ? 1 : (x > 6 ? (x - 6) / (8 - 6) : 0)
         };
     }
 
-    
-
+    /**
+     * Fungsi untuk menghitung derajat keanggotaan pada variabel STRES
+     * @param {number} x - Nilai tingkat stres (0-100)
+     * @returns {object} Object dengan 3 derajat keanggotaan: rendah, sedang, tinggi
+     * 
+     * Penjelasan tiap kategori:
+     * - RENDAH: Stres <= 20 (nilai 1), kemudian turun sampai 40 (nilai 0)
+     * - SEDANG: Puncak di 50 (nilai 1), naik dari 20, turun ke 80
+     * - TINGGI: Stres >= 80 (nilai 1), mulai naik dari 50
+     */
     function hitungStres(x) {
         return {
+            // Kategori RENDAH: stres rendah bernilai 1, turun progressif
             rendah: x <= 20 ? 1 : (x < 40 ? (40 - x) / (40 - 20) : 0),
+            
+            // Kategori SEDANG: puncak di tengah (stres moderat)
             sedang: (x <= 20 || x >= 80) ? 0 : (x < 50 ? (x - 20) / (50 - 20) : (80 - x) / (80 - 50)),
+            
+            // Kategori TINGGI: stres tinggi bernilai 1
             tinggi: x >= 80 ? 1 : (x > 50 ? (x - 50) / (80 - 50) : 0)
         };
     }
 
-    // Fungsi utama yang dijalankan setiap kali slider digeser
+    // ===== BAGIAN 3: FUNGSI UTAMA UNTUK PROSES FUZZY LOGIC =====
+    /**
+     * Fungsi ini dijalankan setiap kali user menggeser slider
+     * Proses: Input -> Fuzzifikasi -> Inferensi -> Defuzzifikasi -> Output
+     */
     function updateFitness() {
-        // Ambil nilai numerik dari slider
-        let tidurVal = parseFloat(sInp.value);
-        let stresVal = parseInt(stInp.value);
+        // STEP 1: Baca nilai dari slider
+        let tidurVal = parseFloat(sInp.value);      // Ambil nilai tidur sebagai floating point (bisa 7.5, 8.2, dll)
+        let stresVal = parseInt(stInp.value);       // Ambil nilai stres sebagai integer (0-100)
         
-        // Update label angka di UI
+        // STEP 2: Update tampilan nilai di label (tampilkan nilai terkini ke user)
         document.getElementById('sleepVal').innerText = tidurVal + " Jam";
         document.getElementById('stressVal').innerText = stresVal;
 
-        // --- LANGKAH 2: FUZZIFIKASI ---
-        // Mengonversi input angka menjadi derajat kebenaran (0.0 - 1.0)
-        let t = hitungTidur(tidurVal);
-        let s = hitungStres(stresVal);
+        // STEP 3: FUZZIFIKASI - Ubah nilai numerik menjadi derajat kebenaran (0.0 - 1.0)
+        // Contoh: Jika tidur 7 jam -> buruk=0, cukup=1, nyenyak=0.5
+        let t = hitungTidur(tidurVal);      // Derajat keanggotaan untuk nilai tidur
+        let s = hitungStres(stresVal);      // Derajat keanggotaan untuk nilai stres
 
-        // --- LANGKAH 3: INFERENSI (RULE BASE) ---
-        // Menentukan bobot (weight) untuk tiap jenis aktivitas (0=Sangat Ringan, 100=Sangat Berat)
-        // Kita menggunakan Math.min (Operator AND) untuk mengambil nilai terkecil dari dua kondisi
+        // STEP 4: INFERENSI - Terapkan rule base (aturan fuzzy)
+        // Kita punya 9 rule yang menggabungkan kondisi tidur (3 kategori) dan stres (3 kategori)
+        // Setiap rule memiliki:
+        //   - val: hasil AND logic (Math.min dari dua kondisi) yang menunjukkan "seberapa cocok rule ini"
+        //   - weight: bobot aktivitas apa yang direkomendasikan (0=Sangat Ringan, 100=Sangat Berat Lari/Gym)
+        //
+        // Operator AND dalam fuzzy logic menggunakan Math.min (mengambil nilai terkecil)
+        // Contoh: Math.min(0.8, 0.6) = 0.6 (kombinasi dari dua kondisi yang bernilai 0.8 dan 0.6)
         let rules = [
             { val: Math.min(t.buruk, s.rendah), weight: 10 },  // ISTIRAHAT
             { val: Math.min(t.buruk, s.sedang), weight: 10 },  // ISTIRAHAT
@@ -103,54 +171,89 @@
         let totalWeight = 0;
         let weightedSum = 0;
 
+        // STEP 5: MENGHITUNG SKOR AKHIR dari semua rules
+        // Rumus defuzzifikasi (Weighted Average / Centroid):
+        //   Skor = (Nilai1 * Bobot1 + Nilai2 * Bobot2 + ...) / (Nilai1 + Nilai2 + ...)
         rules.forEach(r => {
-            weightedSum += (r.val * r.weight);
-            totalWeight += r.val;
+            weightedSum += (r.val * r.weight);  // Akumulasi: derajat keanggotaan × bobot aktivitas
+            totalWeight += r.val;                // Akumulasi: total derajat keanggotaan
         });
 
-        // Skor akhir yang menentukan intensitas aktivitas (0 - 100)
+        // Hitung skor akhir (rata-rata terboboti) yang menentukan intensitas olahraga (0-100)
+        // Skor rendah = istirahat/meditasi, Skor tinggi = lari/gym intensitas penuh
         let fuzzyScore = weightedSum / totalWeight;
 
-        // Tentukan Label, Pesan, dan Warna berdasarkan skor akhir (Output Sugeno)
-        let finalAct = "";
-        let color = "";
-        let advice = "";
+        // STEP 6: PENENTUAN OUTPUT AKHIR (Sugeno Output)
+        // Berdasarkan fuzzyScore (0-100), tentukan rekomendasi aktivitas, warna, dan saran
+        let finalAct = "";      // Nama aktivitas yang direkomendasikan
+        let color = "";         // Warna untuk visual feedback
+        let advice = "";        // Pesan saran untuk user
 
+        // Lakukan pemetaan skor ke aktivitas dengan batasan:
         if (fuzzyScore < 25) { 
-            finalAct = "ISTIRAHAT"; color = "#cf6679"; advice = "Tubuhmu butuh pemulihan total saat ini."; 
+            // Skor sangat rendah = tubuh sangat butuh istirahat
+            finalAct = "ISTIRAHAT"; 
+            color = "#cf6679"; 
+            advice = "Tubuhmu butuh pemulihan total saat ini."; 
         } else if (fuzzyScore < 45) { 
-            finalAct = "MEDITASI"; color = "#03dac6"; advice = "Fokus pada pernapasan untuk menurunkan tingkat stres."; 
+            // Skor rendah = stres tinggi/tidur buruk, butuh meditasi
+            finalAct = "MEDITASI"; 
+            color = "#03dac6"; 
+            advice = "Fokus pada pernapasan untuk menurunkan tingkat stres."; 
         } else if (fuzzyScore < 65) { 
-            finalAct = "YOGA / JALAN"; color = "#bb86fc"; advice = "Aktivitas ringan untuk menjaga keseimbangan tubuh."; 
+            // Skor sedang = kondisi moderat, aktivitas ringan
+            finalAct = "YOGA / JALAN"; 
+            color = "#bb86fc"; 
+            advice = "Aktivitas ringan untuk menjaga keseimbangan tubuh."; 
         } else if (fuzzyScore < 85) { 
-            finalAct = "BERSEPEDA"; color = "#6200ee"; advice = "Kardio intensitas menengah sangat cocok hari ini."; 
+            // Skor sedang-tinggi = kondisi baik, kardio menengah
+            finalAct = "BERSEPEDA"; 
+            color = "#6200ee"; 
+            advice = "Kardio intensitas menengah sangat cocok hari ini."; 
         } else { 
-            finalAct = "LARI / GYM"; color = "#3700b3"; advice = "Kondisi fisik prima! Waktunya latihan intensitas tinggi."; 
+            // Skor sangat tinggi = tidur bagus, stres rendah, siap latihan intensitas tinggi
+            finalAct = "LARI / GYM"; 
+            color = "#3700b3"; 
+            advice = "Kondisi fisik prima! Waktunya latihan intensitas tinggi."; 
         }
 
-        // --- LANGKAH 5: UPDATE TAMPILAN (UI) ---
+        // STEP 7: PERBARUI TAMPILAN / UI
         const display = document.getElementById('result-display');
         const actText = document.getElementById('activity');
         
+        // Tampilkan nama aktivitas dengan warna yang sesuai
         actText.innerText = finalAct;
-        actText.style.color = color; // Ubah warna teks sesuai aktivitas
+        actText.style.color = color;                           // Ubah warna teks sesuai aktivitas
+        
+        // Tampilkan saran detail
         document.getElementById('adviceText').innerText = advice;
-        display.style.borderBottomColor = color; // Ubah warna garis bawah (Border)
+        
+        // Ubah warna garis bawah panel untuk visual feedback
+        display.style.borderBottomColor = color;               // Ubah warna border bawah
 
-        // Menampilkan data teknis di panel debug agar kamu bisa belajar prosesnya
+        // STEP 8: TAMPILKAN DATA DEBUG (untuk pembelajaran)
+        // Panel ini menunjukkan nilai-nilai intermediat proses fuzzy logic
+        // Berguna untuk memahami bagaimana sistem bekerja dan debugging
         document.getElementById('debugLog').innerHTML = `
             <b>PROSES FUZZY:</b><br>
+            <!-- Derajat keanggotaan untuk TIDUR: B=Buruk, C=Cukup, N=Nyenyak -->
             Tidur (${tidurVal}): B:${t.buruk.toFixed(2)}, C:${t.cukup.toFixed(2)}, N:${t.nyenyak.toFixed(2)}<br>
+            <!-- Derajat keanggotaan untuk STRES: R=Rendah, S=Sedang, T=Tinggi -->
             Stres (${stresVal}): R:${s.rendah.toFixed(2)}, S:${s.sedang.toFixed(2)}, T:${s.tinggi.toFixed(2)}<br>
+            <!-- Skor akhir dari defuzzifikasi (0-100 adalah rentang intensitas olahraga) -->
             <b>SKOR AKHIR:</b> ${fuzzyScore.toFixed(2)} (Skala 0-100)
         `;
     }
 
-    // Pasang pendengar kejadian (Event Listener) agar update otomatis saat slider digeser
-    sInp.addEventListener('input', updateFitness);
-    stInp.addEventListener('input', updateFitness);
+    // ===== BAGIAN 4: SETUP EVENT LISTENERS =====
+    // Pasang pendengar kejadian (Event Listener) untuk update otomatis saat slider digeser
+    // Setiap kali user menggeser slider tidur atau stres, fungsi updateFitness() akan terpanggil
+    sInp.addEventListener('input', updateFitness);             // Listener untuk slider tidur
+    stInp.addEventListener('input', updateFitness);             // Listener untuk slider stres
     
-    // Jalankan fungsi satu kali saat halaman pertama kali dimuat
+    // ===== BAGIAN 5: INISIALISASI =====
+    // Jalankan proses fuzzy logic satu kali saat halaman pertama kali dimuat
+    // Ini memastikan user langsung melihat rekomendasi default (tidur 7 jam, stres 50)
     updateFitness();
 </script>
 
